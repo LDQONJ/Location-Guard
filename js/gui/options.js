@@ -145,6 +145,16 @@
         })
         .on('highlight', handleChangePosEvent)
         .on('select', handleChangePosEvent)
+        .on('results', function (e) {
+          var text = e.params && e.params.text ? e.params.text : '';
+          var res = text.match(/^([-+]?[0-9]+(?:\.[0-9]+)?)\s*[,，\s]\s*([-+]?[0-9]+(?:\.[0-9]+)?)$/);
+          if (!res) return;
+
+          var latlng = L.latLng(parseFloat(res[1]), parseFloat(res[2]));
+          handleChangePosEvent({ latlng: latlng });
+          levelMap.setView(latlng, levelMap.getZoom());
+          this.collapse();
+        })
         .addTo(levelMap);
   }
 
@@ -206,12 +216,19 @@
           autocomplete: false,
         })
         .on('results', function (e) {
-          var res = e.params.text.match(/^([-+]?[0-9]+\.[0-9]+)\s*,?\s*([-+]?[0-9]+\.[0-9]+)$/);
+          var text = e.params && e.params.text ? e.params.text : '';
+          var res = text.match(/^([-+]?[0-9]+(?:\.[0-9]+)?)\s*[,，\s]\s*([-+]?[0-9]+(?:\.[0-9]+)?)$/);
           if (!res) return;
 
           var latlng = L.latLng(parseFloat(res[1]), parseFloat(res[2]));
           saveFixedPos(latlng);
           fixedPosMap.setView(latlng, 14);
+          this.collapse();
+        })
+        .on('select', function (e) {
+          if (!e.latlng) return;
+          saveFixedPos(e.latlng);
+          fixedPosMap.setView(e.latlng, 14);
           this.collapse();
         })
         .addTo(fixedPosMap);

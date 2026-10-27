@@ -464,6 +464,45 @@ var Geocoder = L.Control.extend({
     // Prevent lack of input from sending a malformed query to Pelias
     if (!input) return;
 
+    // Check if input is GPS coordinates (e.g. "40.9767138, 29.1603625" or "40.9767138,29.1603625")
+    var m = String(input).trim().match(/^([-+]?[0-9]+(?:\.[0-9]+)?)\s*[,，\s]\s*([-+]?[0-9]+(?:\.[0-9]+)?)$/);
+    if (m) {
+      var lat = parseFloat(m[1]);
+      var lng = parseFloat(m[2]);
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        var coordLabel = lat.toFixed(6) + ', ' + lng.toFixed(6);
+        var feature = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [lng, lat]
+          },
+          properties: {
+            name: coordLabel,
+            label: coordLabel,
+            layer: 'venue'
+          }
+        };
+        var results = {
+          type: 'FeatureCollection',
+          features: [feature]
+        };
+        this.clearResults();
+        this.showResults([feature], input);
+        this.fire('results', {
+          results: results,
+          endpoint: 'coordinates',
+          requestType: 'search',
+          params: { text: input }
+        });
+        var resultEl = this._results.querySelector('.leaflet-pelias-result');
+        if (resultEl) {
+          this.setSelectedResult(resultEl);
+        }
+        return;
+      }
+    }
+
     var url = this.options.url + '/search';
     var params = {
       text: input
@@ -504,6 +543,52 @@ var Geocoder = L.Control.extend({
   // The time represents when the request was *sent*, not when it was recieved.
   maxReqTimestampRendered: new Date().getTime(),
 
+  callPhoton: function (query, type) {
+    var self = this;
+    var photonUrl = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query);
+    L.DomUtil.addClass(this._search, 'leaflet-pelias-loading');
+
+    corslite(photonUrl, function (err, response) {
+      L.DomUtil.removeClass(self._search, 'leaflet-pelias-loading');
+      if (err || !response) {
+        self.showMessage(self.options.textStrings['NO_RESULTS']);
+        return;
+      }
+
+      try {
+        var data = JSON.parse(response.responseText);
+        if (data && data.features && data.features.length > 0) {
+          var features = data.features.map(function (f) {
+            var p = f.properties || {};
+            var labelParts = [p.name, p.street, p.city, p.state, p.country].filter(Boolean);
+            return {
+              type: 'Feature',
+              geometry: f.geometry,
+              properties: {
+                name: p.name || 'Location',
+                label: labelParts.length > 0 ? labelParts.join(', ') : (p.name || 'Location'),
+                layer: p.type || 'address'
+              },
+              bbox: p.extent
+            };
+          });
+
+          self.clearResults();
+          self.showResults(features, query);
+          self.fire('results', {
+            results: { type: 'FeatureCollection', features: features },
+            endpoint: 'photon',
+            requestType: type,
+            params: { text: query }
+          });
+          return;
+        }
+      } catch (e) {}
+
+      self.showMessage(self.options.textStrings['NO_RESULTS']);
+    }, true);
+  },
+
   callPelias: function (endpoint, params, type) {
     params = this.getParams(params);
 
@@ -528,57 +613,8 @@ var Geocoder = L.Control.extend({
         };
       }
 
-      if (err) {
-        var errorMessage;
-        switch (err.code) {
-          // Error codes.
-          // https://mapzen.com/documentation/search/http-status-codes/
-          case 403:
-            errorMessage = self.options.textStrings['ERROR_403'];
-            break;
-          case 404:
-            errorMessage = self.options.textStrings['ERROR_404'];
-            break;
-          case 408:
-            errorMessage = self.options.textStrings['ERROR_408'];
-            break;
-          case 429:
-            errorMessage = self.options.textStrings['ERROR_429'];
-            break;
-          case 500:
-            errorMessage = self.options.textStrings['ERROR_500'];
-            break;
-          case 502:
-            errorMessage = self.options.textStrings['ERROR_502'];
-            break;
-          // Note the status code is 0 if CORS is not enabled on the error response
-          default:
-            errorMessage = self.options.textStrings['ERROR_DEFAULT'];
-            break;
-        }
-        self.showMessage(errorMessage);
-        self.fire('error', {
-          results: results,
-          endpoint: endpoint,
-          requestType: type,
-          params: params,
-          errorCode: err.code,
-          errorMessage: errorMessage
-        });
-      }
-
-      // There might be an error message from the geocoding service itself
-      if (results && results.geocoding && results.geocoding.errors) {
-        errorMessage = results.geocoding.errors[0];
-        self.showMessage(errorMessage);
-        self.fire('error', {
-          results: results,
-          endpoint: endpoint,
-          requestType: type,
-          params: params,
-          errorCode: err.code,
-          errorMessage: errorMessage
-        });
+      if (err || (results && results.geocoding && results.geocoding.errors)) {
+        self.callPhoton(params.text, type);
         return;
       }
 
