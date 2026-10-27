@@ -4,7 +4,7 @@
   "version": "3.1.1",
   "browser_specific_settings": {
     "gecko": {
-      "id": "admin@ldqmail.com",
+      "id": "location-guard@ldqio.com",
       "data_collection_permissions": {
         "required": ["none"]
       }
