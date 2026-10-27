@@ -4,7 +4,7 @@
   "version": "3.1.1",
   "browser_specific_settings": {
     "gecko": {
-      "id": "location-guard-v3@mrfanii.github.io",
+      "id": "admin@ldqmail.com",
       "data_collection_permissions": {
         "required": ["none"]
       }
@@ -22,7 +22,7 @@
     "scripts": ["js/background/statistics.js", "js/common.js", "js/background/main.js"]
   },
   "description": "Hide your geographic location from websites.",
-  "homepage_url": "https://github.com/mrfanii/Location-Guard-V3",
+  "homepage_url": "https://github.com/LDQONJ/Location-Guard",
   "icons": {
     "128": "images/pin_128.png"
   },
